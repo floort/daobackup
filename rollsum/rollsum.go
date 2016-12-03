@@ -15,7 +15,7 @@ limitations under the License.
 //
 // The bup project is at https://github.com/apenwarr/bup and its splitting in
 // particular is at https://github.com/apenwarr/bup/blob/master/lib/bup/bupsplit.c
-package rollsum // import "camlistore.org/pkg/rollsum"
+package rollsum // import "github.com/floort/daobackup/rollsum"
 
 const windowSize = 64
 const charOffset = 31
