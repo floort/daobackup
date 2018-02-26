@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+service DOABackup {
+  rpc PutChunk(Chunk) returns (Status) {}
+  rpc GetChunk(Chunk) returns (ChunkStatus) {}
+
+}
+
+message Chunk {
+  string hash = 1;
+  bytes blob = 2;
+}
+
+message Status {
+  bool ok = 1;
+  string message = 2;
+}
+
+message ChunkStatus {
+  Status status = 1;
+  Chunk chunk = 2;
+}
