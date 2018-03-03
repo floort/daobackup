@@ -1,0 +1,29 @@
+syntax = "proto3";
+import "google/protobuf/timestamp.proto";
+
+service DAOBackupService {
+	enum MetaType {
+		FILE = 0;
+		DIR = 1;
+		ROOT = 2;
+	}
+	enum HashType {
+		MD5  = 0;
+		SHA1 = 1;
+		SHA256 = 2;
+	}
+	message Hash {
+		HashType type = 1;
+		string value = 2;
+	}
+	message FileMeta {
+		MetaType type = 1;
+		Hash hash = 2;
+		int64 size = 3;
+		string fowner = 4;
+		string fgroup = 5;
+		google.protobuf.Timestamp mtime = 6;
+		
+		repeated string chunks = 9;
+	}
+}

@@ -7,7 +7,7 @@ import (
 
 func main() {
 	bc := BackupClient{}
-	hash, err := BackupFile(&bc, os.Args[1])
+	hash, err := BackupDir(&bc, os.Args[1])
 	if err != nil {
 		panic(err)
 	}

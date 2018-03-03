@@ -7,11 +7,9 @@ import (
 	"fmt"
 	"io"
 	"os"
-
-	"github.com/floort/daobackup/rollsum"
 )
 
-const CHUNK_BITS = 22
+const CHUNK_BITS = 20
 
 type FileMeta struct {
 	Type   string
@@ -31,10 +29,12 @@ func (fm *FileMeta) String() string {
 }
 
 func BackupFile(bc *BackupClient, path string) (hash string, err error) {
+	fmt.Println(path)
 	f, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
+	defer f.Close()
 	stat, err := f.Stat()
 	if err != nil {
 		return "", err
@@ -48,44 +48,41 @@ func BackupFile(bc *BackupClient, path string) (hash string, err error) {
 
 	filesize := uint64(0)
 	fullhash := sha256.New()
-	chunks, err := chunkfile(f)
-	if err != nil {
-		return "", err
-	}
-	for c := range chunks {
-		fullhash.Write(chunks[c])
-		filesize += uint64(len(chunks[c]))
-		hash, err := bc.PutChunk(chunks[c])
-		if err != nil {
-			return "", err
-		}
-		filemeta.Chunks = append(filemeta.Chunks, hash)
-	}
-	filemeta.Hash = fmt.Sprintf("sha256:%x", fullhash.Sum(nil))
-	return bc.PutChunk([]byte(filemeta.String()))
-}
-
-func chunkfile(file *os.File) (chunks [][]byte, err error) {
 	chunk := []byte{}
-	sum := rollsum.New()
-	reader := bufio.NewReader(file)
+	sum := MovingSum{}
+	reader := bufio.NewReader(f)
 	for {
 		// Read file one byte at a time and split into chunks
 		b, err := reader.ReadByte()
 		if err != nil {
 			if err == io.EOF {
 				// Perform cleanup
-				chunks = append(chunks, chunk)
-				err = nil // End of file is not an error
+				fullhash.Write(chunk)
+				filesize += uint64(len(chunk))
+				hash, err := bc.PutChunk(chunk)
+				if err != nil {
+					return "", err
+				}
+				filemeta.Chunks = append(filemeta.Chunks, hash)
+				break
+			} else {
+				return "", err
 			}
-			return chunks, err
 		}
-		sum.Roll(b)
+		sum.Add(b)
 		chunk = append(chunk, b)
-		if sum.OnSplitWithBits(CHUNK_BITS) {
-			chunks = append(chunks, chunk)
+		if sum.OnSplit(18) && len(chunk) > 8194 {
+			fullhash.Write(chunk)
+			filesize += uint64(len(chunk))
+			hash, err := bc.PutChunk(chunk)
+			if err != nil {
+				return "", err
+			}
+			filemeta.Chunks = append(filemeta.Chunks, hash)
 			chunk = []byte{}
 		}
-
 	}
+	filemeta.Hash = fmt.Sprintf("sha256:%x", fullhash.Sum(nil))
+	fmt.Printf("%+V\n", filemeta)
+	return bc.PutChunk([]byte(filemeta.String()))
 }
