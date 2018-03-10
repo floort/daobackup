@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path"
 )
@@ -25,7 +24,6 @@ func (fm *DirMeta) String() string {
 }
 
 func BackupDir(bc *BackupClient, pathname string) (hash string, err error) {
-	fmt.Println(pathname)
 	f, err := os.Open(pathname)
 	if err != nil {
 		return "", err

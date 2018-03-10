@@ -1,12 +1,13 @@
 package main
 
 import (
-	"bufio"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
+
+	"github.com/aclements/go-rabin/rabin"
+    "github.com/kr/pretty"
 )
 
 const CHUNK_BITS = 20
@@ -29,7 +30,6 @@ func (fm *FileMeta) String() string {
 }
 
 func BackupFile(bc *BackupClient, path string) (hash string, err error) {
-	fmt.Println(path)
 	f, err := os.Open(path)
 	if err != nil {
 		return "", err
@@ -46,43 +46,32 @@ func BackupFile(bc *BackupClient, path string) (hash string, err error) {
 		Mode: stat.Mode().String(),
 	}
 
-	filesize := uint64(0)
+	chunker := rabin.NewChunker(rabin.NewTable(rabin.Poly64, 512), f, 1024, 8*1024*1024, 32*1024*1024)
 	fullhash := sha256.New()
-	chunk := []byte{}
-	sum := MovingSum{}
-	reader := bufio.NewReader(f)
-	for {
-		// Read file one byte at a time and split into chunks
-		b, err := reader.ReadByte()
+	for chunksize, err := chunker.Next(); err == nil; chunksize, err = chunker.Next() {
+        if chunksize == 0 {
+            break
+        }
+		// Rewind file to start of the chunk
+		f.Seek(-int64(chunksize), os.SEEK_CUR)
+		// Read chunk
+		buf := make([]byte, chunksize)
+		n, err := f.Read(buf)
 		if err != nil {
-			if err == io.EOF {
-				// Perform cleanup
-				fullhash.Write(chunk)
-				filesize += uint64(len(chunk))
-				hash, err := bc.PutChunk(chunk)
-				if err != nil {
-					return "", err
-				}
-				filemeta.Chunks = append(filemeta.Chunks, hash)
-				break
-			} else {
-				return "", err
-			}
+			return "", err
 		}
-		sum.Add(b)
-		chunk = append(chunk, b)
-		if sum.OnSplit(18) && len(chunk) > 8194 {
-			fullhash.Write(chunk)
-			filesize += uint64(len(chunk))
-			hash, err := bc.PutChunk(chunk)
-			if err != nil {
-				return "", err
-			}
-			filemeta.Chunks = append(filemeta.Chunks, hash)
-			chunk = []byte{}
+		if n != chunksize {
+			panic("buffer error")
 		}
+		fmt.Println(fullhash.Write(buf))
+		hash, err := bc.PutChunk(buf)
+		if err != nil {
+			return "", err
+		}
+		filemeta.Chunks = append(filemeta.Chunks, hash)
 	}
 	filemeta.Hash = fmt.Sprintf("sha256:%x", fullhash.Sum(nil))
-	fmt.Printf("%+V\n", filemeta)
+	fmt.Printf("%# v\n", pretty.Formatter(filemeta))
 	return bc.PutChunk([]byte(filemeta.String()))
+
 }
