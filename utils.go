@@ -1,12 +1,22 @@
 package daobackup
 
-
 import (
 	"crypto/sha256"
-	"fmt"
+	"io"
+
+	"github.com/restic/chunker"
 )
 
-func Hash(chunk []byte) (hash string) {
-	chunkhash := sha256.Sum256(chunk)
-	return fmt.Sprintf("sha256:%x", chunkhash)
+const (
+	MinChunkSize = 512 * 1024      // 512 KB
+	MaxChunkSize = 8 * 1024 * 1024 // 8 MB
+)
+
+func NewChunker(rd io.Reader) *chunker.Chunker {
+	return chunker.NewWithBoundaries(rd, chunker.Pol(0x3DA3358B4DC173), MinChunkSize, MaxChunkSize)
+
+}
+
+func Hash(chunk []byte) (hash ChunkHash) {
+	return sha256.Sum256(chunk)
 }
