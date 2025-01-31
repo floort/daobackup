@@ -1,7 +1,6 @@
 package daobackup
 
 import (
-	"crypto/sha256"
 	"io"
 
 	"github.com/restic/chunker"
@@ -15,8 +14,4 @@ const (
 func NewChunker(rd io.Reader) *chunker.Chunker {
 	return chunker.NewWithBoundaries(rd, chunker.Pol(0x3DA3358B4DC173), MinChunkSize, MaxChunkSize)
 
-}
-
-func Hash(chunk []byte) (hash ChunkHash) {
-	return sha256.Sum256(chunk)
 }

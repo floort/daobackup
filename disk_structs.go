@@ -4,8 +4,6 @@ import "time"
 
 //go:generate msgp
 
-type ChunkHash [32]byte
-
 type ChunkMeta struct {
 	Offset uint64    `msg:"offset"`
 	Size   uint64    `msg:"size"`
