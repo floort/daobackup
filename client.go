@@ -3,7 +3,9 @@ package daobackup
 import (
 	"fmt"
 	"path/filepath"
-	"time"
+
+	"google.golang.org/protobuf/proto"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type BackupClient struct {
@@ -23,13 +25,12 @@ func (b BackupClient) Backup(root string) (err error) {
 			return err
 		}
 	}
-	backuproot.RootDir = hash
-	backuproot.Time = time.Now()
-	bytesbuf := make([]byte, 0)
-	bytesbuf, err = backuproot.MarshalMsg(bytesbuf)
+	backuproot.RootDirectory = hash.Bytes()
+	backuproot.Timestamp = timestamppb.Now()
+	bytesbuf, err := proto.Marshal(&backuproot)
 	if err != nil {
 		return err
 	}
-	fmt.Println(Hash(bytesbuf))
+	fmt.Println(HashChunk(bytesbuf))
 	return nil
 }

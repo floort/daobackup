@@ -6,6 +6,9 @@ import (
 	"io"
 	"os"
 	"path"
+
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type ErrorBytes struct {
@@ -36,10 +39,10 @@ func ChunkFile(path string) func(func(ChunkHash, ErrorBytes) bool) {
 			yield(ChunkHash{}, ErrorBytes{fmt.Errorf("ChunkFile can't chunk a directory"), nil})
 		}
 	}
-	filemeta.Type = Normal
+	filemeta.Type = FileType_NormalFile
 	filemeta.Name = stat.Name()
-	filemeta.Size = stat.Size()
-	filemeta.ModTime = stat.ModTime()
+	filemeta.Size = uint64(stat.Size())
+	filemeta.ModificationTime = timestamppb.New(stat.ModTime())
 	filemeta.Mode = uint32(stat.Mode())
 
 	hasher := sha256.New()
@@ -49,15 +52,14 @@ func ChunkFile(path string) func(func(ChunkHash, ErrorBytes) bool) {
 		for {
 			chunk, err := chunker.Next(chunkbuffer)
 			if err == io.EOF { // No more data chunks, return FileMeta chunk
-				filemeta.Hash = ChunkHash(hasher.Sum([]byte{}))
-				bytesbuf := make([]byte, 0)
-				bytesbuf, err := filemeta.MarshalMsg(bytesbuf)
+				filemeta.Hash = ChunkHash(hasher.Sum([]byte{})).Bytes()
+				bytesbuf, err := proto.Marshal(&filemeta)
 				if err != nil {
 					yield(ChunkHash{}, ErrorBytes{err, nil})
 					filehandle.Close()
 					return
 				}
-				yield(Hash(bytesbuf), ErrorBytes{nil, bytesbuf})
+				yield(HashChunk(bytesbuf), ErrorBytes{nil, bytesbuf})
 				filehandle.Close()
 				return
 			}
@@ -66,8 +68,8 @@ func ChunkFile(path string) func(func(ChunkHash, ErrorBytes) bool) {
 				filehandle.Close()
 				return
 			}
-			chunkhash := Hash(chunk.Data)
-			filemeta.Chunks = append(filemeta.Chunks, ChunkMeta{Offset: uint64(chunk.Start), Size: uint64(chunk.Length), Hash: chunkhash})
+			chunkhash := HashChunk(chunk.Data)
+			filemeta.Chunks = append(filemeta.Chunks, &ChunkMeta{Offset: uint64(chunk.Start), Size: uint64(chunk.Length), Hash: chunkhash.Bytes()})
 			// update total file hash
 			hasher.Write(chunk.Data)
 			if !yield(chunkhash, ErrorBytes{nil, chunk.Data}) {
@@ -101,12 +103,12 @@ func ChunkDir(dirpath string) func(func(ChunkHash, ErrorBytes) bool) {
 			yield(ChunkHash{}, ErrorBytes{fmt.Errorf("ChunkDir can't chunk a file"), nil})
 		}
 	}
-	filemeta.Type = Directory
+	filemeta.Type = FileType_Directory
 	filemeta.Name = stat.Name()
-	filemeta.Size = stat.Size()
-	filemeta.ModTime = stat.ModTime()
+	filemeta.Size = uint64(stat.Size())
+	filemeta.ModificationTime = timestamppb.New(stat.ModTime())
 	filemeta.Mode = uint32(stat.Mode())
-	filemeta.Entries = map[string]ChunkHash{}
+	filemeta.DirectoryEntries = map[string][]byte{}
 	return func(yield func(ChunkHash, ErrorBytes) bool) {
 		files, err := os.ReadDir(dirpath)
 		if err != nil {
@@ -123,23 +125,22 @@ func ChunkDir(dirpath string) func(func(ChunkHash, ErrorBytes) bool) {
 						break
 					}
 				}
-				filemeta.Entries[file.Name()] = hash
+				filemeta.DirectoryEntries[file.Name()] = hash.Bytes()
 			} else {
 				for hash, blob := range ChunkFile(fullpath) {
 					if !yield(hash, blob) {
 						break
 					}
 				}
-				filemeta.Entries[file.Name()] = hash
+				filemeta.DirectoryEntries[file.Name()] = hash.Bytes()
 			}
 
 		}
-		bytesbuf := make([]byte, 0)
-		bytesbuf, err = filemeta.MarshalMsg(bytesbuf)
+		bytesbuf, err := proto.Marshal(&filemeta)
 		if err != nil {
 			yield(ChunkHash{}, ErrorBytes{err, nil})
 			return
 		}
-		yield(Hash(bytesbuf), ErrorBytes{nil, bytesbuf})
+		yield(HashChunk(bytesbuf), ErrorBytes{nil, bytesbuf})
 	}
 }

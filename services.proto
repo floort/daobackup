@@ -1,0 +1,65 @@
+syntax = "proto3";
+package daobackup;
+
+// Build with: protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative .\services.proto
+option go_package = "github.com/floort/daobackup";
+
+import "google/protobuf/timestamp.proto";
+
+message ChunkMeta {
+    uint64 offset = 1;
+    uint64 size = 2;
+    bytes hash = 3;
+}
+
+enum FileType {
+    NormalFile = 0;
+    Directory = 1;
+    SymbolicLink = 2;
+    HardLink = 3;
+}
+
+message FileMeta {
+    FileType type = 1;
+    bytes hash = 2;
+    uint64 size = 3;
+    string name = 4;
+    string owner = 5;
+    string group = 6;
+    uint32 mode = 7;
+    google.protobuf.Timestamp modification_time = 8;
+    google.protobuf.Timestamp creation_time = 9;
+    repeated ChunkMeta chunks = 10;
+    map<string, bytes> directory_entries = 11;
+}
+
+message BackupRoot {
+    bytes previous = 1;
+    string path = 2;
+    google.protobuf.Timestamp timestamp = 3;
+    bytes root_directory = 4;
+}
+
+
+
+message HashedBlob {
+    bytes hash = 1;
+    bytes blob = 2;
+}
+
+message RPCStatus {
+    bool succes = 1;
+    string message = 2;
+}
+
+message Hash {
+    bytes hash = 1;
+}
+
+service DAOBackup {
+    rpc PutBlob (HashedBlob) returns (RPCStatus) {}
+    rpc CheckBlob (Hash) returns (RPCStatus) {}
+    rpc GetBlob (Hash) returns (HashedBlob) {}
+}
+
+ 
